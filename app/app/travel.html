@@ -1,0 +1,48 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Custom Coordinates Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { width: 100%; height: 100vh; }
+  </style>
+  </head>
+  <body>
+  <div id="map"></div>
+  <script>
+    const startLat = 51.5819;
+    const startLon = -0.3435;
+    const route = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-0.3435, 51.5819], [-0.3558, 51.5789], [-0.3667, 51.5668], [-0.3602, 51.5601], [-0.3394, 51.617], [-0.3074, 51.6095], [-0.3349, 51.576], [-0.3435, 51.5819]]}, "properties": {}}]};
+    const waypoints = [[51.5819, -0.3435], [51.5789, -0.3558], [51.5668, -0.3667], [51.5601, -0.3602], [51.617, -0.3394], [51.6095, -0.3074], [51.576, -0.3349], [51.5819, -0.3435]];
+
+    const map = L.map('map').setView([startLat, startLon], 13);
+
+  // OpenStreetMap Tiles (fallback if no OS key)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+    // Route GeoJSON
+    const layer = L.geoJSON(route, {
+      style: { color: 'blue', weight: 4 }
+    }).addTo(map);
+
+    // Optional markers for waypoints
+    waypoints.forEach(pt => L.marker(pt).addTo(map));
+
+    // Fit map to route if possible
+    try {
+      const bounds = layer.getBounds();
+      if (bounds && bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.1));
+      }
+    } catch (e) {}
+  </script>
+  </body>
+  </html>

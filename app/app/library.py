@@ -1,7 +1,12 @@
-from typing import Iterable, Tuple, List, Optional
+from typing import Iterable, Tuple, List, Optional, Protocol
 import os
 import json
 from dotenv import load_dotenv
+
+
+class WaypointLike(Protocol):
+    name: str
+    coordinates: Tuple[float, float]
 
 
 def generate_leaflet_map_html(
@@ -127,3 +132,19 @@ def write_leaflet_map_html(
     html = generate_leaflet_map_html(coordinates, os_api_key=os_api_key, title=title, show_markers=show_markers)
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html)
+
+
+def generate_leaflet_map_html_from_waypoints(
+    waypoints: Iterable[WaypointLike],
+    os_api_key: Optional[str] = None,
+    title: str = "Custom Coordinates Map",
+    show_markers: bool = True,
+) -> str:
+    """
+    Generate map HTML from a sequence of Waypoint-like objects with
+    attributes: name: str and coordinates: (lat, lon).
+    """
+    points: List[Tuple[float, float]] = [
+        (float(w.coordinates[0]), float(w.coordinates[1])) for w in waypoints
+    ]
+    return generate_leaflet_map_html(points, os_api_key=os_api_key, title=title, show_markers=show_markers)
