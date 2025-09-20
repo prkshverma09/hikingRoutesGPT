@@ -196,27 +196,28 @@ def coords_form(request: Request):
 def coords_form_submit(
     request: Request,
     coords_text: str = Form(...),
-    title: str = Form("Custom Coordinates Map"),
 ):
     """
-    Accepts coordinates in the textarea: one pair per line as "lat, lon"
-    Example:
-      51.713, -0.786
-      51.7125, -0.787
+    Accepts coordinates as JSON in the textarea. Supported formats:
+      - [[lat, lon], [lat, lon], ...]
+      - [{"lat": 51.713, "lon": -0.786}, ...]
     """
-    lines = [ln.strip() for ln in coords_text.splitlines() if ln.strip()]
+    try:
+        parsed = json.loads(coords_text)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+
+    if not isinstance(parsed, list) or len(parsed) < 2:
+        raise HTTPException(status_code=400, detail="Provide a JSON array with at least two coordinates")
+
     coords: List[tuple[float, float]] = []
-    for ln in lines:
-        # Allow comma or space separation
-        sep = "," if "," in ln else None
-        parts = [p.strip() for p in (ln.split(sep) if sep else ln.split())]
-        if len(parts) != 2:
-            raise HTTPException(status_code=400, detail=f"Invalid coordinate line: '{ln}'")
-        try:
-            lat = float(parts[0])
-            lon = float(parts[1])
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid numeric values in line: '{ln}'")
+    for item in parsed:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            lat, lon = float(item[0]), float(item[1])
+        elif isinstance(item, dict) and "lat" in item and "lon" in item:
+            lat, lon = float(item["lat"]), float(item["lon"])
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid coordinate item: {item}")
         coords.append((lat, lon))
 
     # Always snap using ORS
@@ -226,7 +227,7 @@ def coords_form_submit(
     # Build an ORS directions request with all coordinates as waypoints
     coords_lonlat = [[lon, lat] for lat, lon in coords]
     try:
-        route_geojson, snapped_waypoints = ors_hiking_route_with_waypoints(coords_lonlat, ors_api_key)
+        route_geojson, snapped_waypoints, summary = ors_hiking_route_with_waypoints(coords_lonlat, ors_api_key)
     except ExternalAPIError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
@@ -237,6 +238,10 @@ def coords_form_submit(
         raise HTTPException(status_code=500, detail="Missing OS_API_KEY environment variable")
 
     start = snapped_waypoints[0] if snapped_waypoints else coords[0]
+    # Auto-generate a clean title from summary (AI-like naming)
+    distance_km = (summary.get("distance_m") or 0) / 1000.0
+    duration_h = (summary.get("duration_s") or 0) / 3600.0
+    auto_title = f"Scenic Trail • {distance_km:.1f} km • ~{duration_h:.1f} h"
     return templates.TemplateResponse(
         "map.html",
         {
@@ -245,7 +250,7 @@ def coords_form_submit(
             "start_lon": start[1],
             "route_geojson": route_geojson,
             "os_api_key": os_api_key,
-            "title": f"{title}",
+            "title": auto_title,
             # Use snapped waypoint positions if available; otherwise original
             "waypoints_json": (
                 [[lat, lon] for (lat, lon) in snapped_waypoints]

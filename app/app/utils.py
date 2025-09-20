@@ -153,7 +153,7 @@ def ors_hiking_route(coordinates: List[List[float]], ors_api_key: str) -> Dict[s
 
 def ors_hiking_route_with_waypoints(
     coordinates: List[List[float]], ors_api_key: str
-) -> Tuple[Dict[str, Any], List[Tuple[float, float]]]:
+) -> Tuple[Dict[str, Any], List[Tuple[float, float]], Dict[str, Any]]:
     """
     Call ORS foot-hiking and return a FeatureCollection together with snapped
     waypoint coordinates (lat, lon), derived from ORS 'way_points' indices onto
@@ -217,7 +217,18 @@ def ors_hiking_route_with_waypoints(
         # If we can't extract, leave snapped_latlon empty
         snapped_latlon = []
 
-    return feature_collection, snapped_latlon
+    # Summary (distance/duration, and ascent/descent if present)
+    summary_raw = route0.get("summary", {})
+    summary = {
+        "distance_m": summary_raw.get("distance"),
+        "duration_s": summary_raw.get("duration"),
+    }
+    if "ascent" in route0:
+        summary["ascent_m"] = route0.get("ascent")
+    if "descent" in route0:
+        summary["descent_m"] = route0.get("descent")
+
+    return feature_collection, snapped_latlon, summary
 
 def geojson_to_gpx(geojson_data: Dict[str, Any]) -> str:
     """
