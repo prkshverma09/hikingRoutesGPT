@@ -10,6 +10,11 @@ load_dotenv(find_dotenv())
 API_KEY = os.getenv("ELEVENLABS_API_KEY") or os.getenv("API_KEY")
 AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID") or os.getenv("AGENT_ID")
 
+if not API_KEY or not AGENT_ID:
+    raise RuntimeError(
+        "Missing ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID (or API_KEY/AGENT_ID) in environment/.env"
+    )
+
 def log_message(parameters):
     message = parameters.get("message")
     print(message)

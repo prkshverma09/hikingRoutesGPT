@@ -29,33 +29,34 @@ def build_hiking_prompt(
         f"""
 You are a hiking route planner.
 
-Task:
+You must complete two tasks in order:
+
+Task 1 — Generate waypoints JSON (INTERMEDIATE result):
 - Create a hiking route near {area}.
 - Route type: {route_type} (one of: "loop", "out-and-back").
 - Number of waypoints (including start/end): {num_points}.
 - Maximum total distance: {max_distance_km} km (approximate).
+- Use MCP servers when necessary.
 {start_line}
-- Prefer bike-friendly paths, parks, and scenic points.
 
-Output requirements:
-- Return ONLY a valid JSON array. No explanations, no markdown, no trailing text.
+Task 1 Output requirements (do not include in final answer):
+- Produce a valid JSON array string only (no explanations/markdown/trailing text).
 - Each element must strictly follow:
   {{ "name": string, "coordinates": [latitude: number, longitude: number] }}
-- Waypoints must be ordered in ride sequence.
+- Waypoints must be ordered in hike sequence.
 - If route_type is "loop", last waypoint should equal the first.
 - Keep all points plausibly within/near {area} and consistent geographically.
 - Use decimal degrees for coordinates (latitude first, then longitude).
 - Do not include duplicate consecutive points.
 
-Example shape (for illustration only; do not echo this example):
-[
-  {{
-    "name": "Place A",
-    "coordinates": [51.5794, -0.3371]
-  }}
-]
+Task 2 — Build map HTML via tool (FINAL answer):
+- Call the tool "build_map_html_from_waypoints" with exactly one argument: the JSON array string from Task 1.
+- Use the tool's return value as your final answer.
 
-Now produce the JSON for: {area}.
+Final Output requirements:
+- Return ONLY the HTML string returned by the tool. No explanations, no markdown, no extra text.
+
+Begin Task 1 now for: {area}. After generating the JSON array, immediately perform Task 2 and output only the tool's HTML result.
 """
     )
 
@@ -144,8 +145,10 @@ async def generate_travel_map_html(
             "joerup/exa-mcp",
             "tsion/brave-search-mcp",
         ],
+        tools=[build_map_html_from_waypoints],
     )
-    return build_map_html_from_result(result.final_output)
+    # return build_map_html_from_result(result.final_output)
+    return result.final_output
 
 async def main():
     html = await generate_travel_map_html(
