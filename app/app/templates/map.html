@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>{{ title }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  const startLat = {{ start_lat }};
+  const startLon = {{ start_lon }};
+  const route = {{ route_geojson | safe }};
+  const osKey = "{{ os_api_key }}";
+
+  const map = L.map('map').setView([startLat, startLon], 13);
+
+  // OS Raster Tiles
+  L.tileLayer(`https://api.os.uk/maps/raster/v1/zxy/Light_3857/{z}/{x}/{y}.png?key=${osKey}`, {
+    attribution: '© Ordnance Survey',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Route GeoJSON
+  const layer = L.geoJSON(route, {
+    style: { color: 'blue', weight: 4 }
+  }).addTo(map);
+
+  // Fit map to route if possible
+  try {
+    const bounds = layer.getBounds();
+    if (bounds && bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.1));
+    }
+  } catch (e) {
+    // ignore fit errors
+  }
+</script>
+</body>
+</html>
