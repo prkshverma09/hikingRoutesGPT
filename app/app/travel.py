@@ -6,7 +6,7 @@ from .library import generate_leaflet_map_html_from_waypoints
 from .types import Waypoint
 import json
 
-def build_cycling_prompt(
+def build_hiking_prompt(
     area: str,
     route_type: str,
     num_points: int,
@@ -23,10 +23,10 @@ def build_cycling_prompt(
 
     return (
         f"""
-You are a cycling route planner.
+You are a hiking route planner.
 
 Task:
-- Create a cycling route near {area}.
+- Create a hiking route near {area}.
 - Route type: {route_type} (one of: "loop", "out-and-back").
 - Number of waypoints (including start/end): {num_points}.
 - Maximum total distance: {max_distance_km} km (approximate).
@@ -68,33 +68,40 @@ def build_map_html_from_result(final_output: str) -> str:
 
 load_dotenv()
 
-async def main():
+async def generate_travel_map_html(
+    area: str,
+    route_type: str,
+    num_points: int,
+    max_distance_km: float,
+) -> str:
     client = AsyncDedalus()
     runner = DedalusRunner(client)
-
-    prompt = build_cycling_prompt(
-        area="Harrow, London",
-        route_type="loop",
-        num_points=8,
-        max_distance_km=25,
+    prompt = build_hiking_prompt(
+        area=area,
+        route_type=route_type,
+        num_points=num_points,
+        max_distance_km=max_distance_km,
         start_name=None,
         start_lat=None,
         start_lng=None,
     )
-
     result = await runner.run(
         input=prompt,
-
         model="openai/gpt-4.1",
         mcp_servers=[
-            "joerup/exa-mcp",        # For semantic travel research
-            "tsion/brave-search-mcp", # For travel information search
-        ]
+            "joerup/exa-mcp",
+            "tsion/brave-search-mcp",
+        ],
     )
+    return build_map_html_from_result(result.final_output)
 
-    print(f"Travel Planning Results:\n{result.final_output}")
-
-    html = build_map_html_from_result(result.final_output)
+async def main():
+    html = await generate_travel_map_html(
+        area="Harrow, London",
+        route_type="loop",
+        num_points=8,
+        max_distance_km=25,
+    )
     with open("app/travel.html", "w") as f:
         f.write(html)
 
