@@ -2,8 +2,12 @@ import asyncio
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from .library import generate_leaflet_map_html_from_waypoints
+from .library import (
+    generate_leaflet_map_html_from_waypoints,
+    generate_leaflet_map_html_from_geojson,
+)
 from .types import Waypoint
+from .utils import ors_hiking_route_with_waypoints, ExternalAPIError
 import json
 
 def build_hiking_prompt(
@@ -56,15 +60,47 @@ Now produce the JSON for: {area}.
     )
 
 def build_map_html_from_result(final_output: str) -> str:
-    """Parse JSON final_output into Waypoints and return Leaflet map HTML."""
-    waypoint_objs = [
-        Waypoint(
-            name=w["name"],
-            coordinates=(float(w["coordinates"][0]), float(w["coordinates"][1]))
-        )
+    """Parse JSON final_output into Waypoints and return Leaflet map HTML.
+    Uses advanced Outdooractive-like styling via GeoJSON rendering.
+    """
+    waypoints = [
+        (float(w["coordinates"][0]), float(w["coordinates"][1]))
         for w in json.loads(final_output)
     ]
-    return generate_leaflet_map_html_from_waypoints(waypoint_objs)
+    if len(waypoints) < 2:
+        raise ValueError("Planner returned fewer than 2 waypoints")
+    # Try to snap to hiking network via ORS for a realistic, dense geometry
+    try:
+        load_dotenv()
+        ors_key = os.getenv("ORS_API_KEY")
+        if ors_key:
+            coords_lonlat = [[lon, lat] for (lat, lon) in waypoints]
+            route_geojson, snapped_waypoints, _summary = ors_hiking_route_with_waypoints(coords_lonlat, ors_key)
+            # snapped_waypoints are (lat, lon)
+            use_wps = snapped_waypoints if snapped_waypoints else waypoints
+            return generate_leaflet_map_html_from_geojson(
+                route_geojson,
+                waypoints=use_wps,
+                title="Planned Hike",
+            )
+    except ExternalAPIError:
+        pass
+    except Exception:
+        pass
+
+    # Fallback: straight-line between LLM waypoints
+    coords_lonlat = [[lon, lat] for (lat, lon) in waypoints]
+    route_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords_lonlat},
+                "properties": {},
+            }
+        ],
+    }
+    return generate_leaflet_map_html_from_geojson(route_geojson, waypoints=waypoints, title="Planned Hike")
 
 load_dotenv()
 
