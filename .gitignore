@@ -2,3 +2,26 @@
 .env.local
 
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment files / secrets
+.env
+.env.*
+!.env.example
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
