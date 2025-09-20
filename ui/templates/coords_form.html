@@ -32,9 +32,21 @@
     button { background: linear-gradient(180deg, #22c55e, #16a34a); color: #001b07; border: none; padding: 12px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; letter-spacing: 0.2px; }
     button:hover { filter: brightness(1.05); }
     .note { font-size: 12px; color: var(--muted); }
+    /* Loading overlay */
+    .overlay { position: fixed; inset: 0; background: rgba(11,18,32,0.85); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    .overlay.show { display: flex; }
+    .spinner { width: 56px; height: 56px; border: 6px solid rgba(255,255,255,0.15); border-top-color: #22c55e; border-radius: 50%; animation: spin 1s linear infinite; }
+    .loading-text { margin-top: 14px; color: var(--muted); font-size: 14px; text-align: center; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
+  <div id="loading" class="overlay">
+    <div style="display:grid;place-items:center;gap:12px;">
+      <div class="spinner"></div>
+      <div class="loading-text">Planning your hike…</div>
+    </div>
+  </div>
   <div class="wrap">
     <div class="card">
       <div class="card-header">
@@ -44,25 +56,31 @@
       <form method="post" action="/ui/coords">
         <div class="card-body">
           <div class="row">
-            <label for="coords_text">Waypoints (JSON)</label>
-            <textarea name="coords_text" id="coords_text" required placeholder='[[51.713, -0.786], [51.7125, -0.787], [51.712, -0.788]]'></textarea>
-            <div class="hint">Provide at least two coordinates. Supported formats: [[lat, lon], ...] or [{"lat": 51.713, "lon": -0.786}, ...]</div>
+            <label for="instructions">Instructions</label>
+            <textarea id="instructions" name="instructions" required placeholder="area: Lake District, UK; route_type: loop; num_points: 8; max_distance_km: 25; start_name: Keswick; start_lat: 54.6; start_lng: -3.1;\nPrefer ridge walks and scenic viewpoints; avoid busy roads." style="height:220px;"></textarea>
+            <div class="hint">Provide a single prompt. Use keys like: area, route_type (loop|out-and-back), num_points, max_distance_km, start_name, start_lat, start_lng. Separate entries by newlines or semicolons. Any extra lines are treated as preferences.</div>
           </div>
-          <div class="examples">Example:
-[
-  [51.713, -0.786],
-  [51.7125, -0.787],
-  [51.710, -0.790]
-]
-          </div>
+
           <div class="actions">
-            <button type="submit">Build Route</button>
-            <span class="note">Tip: Paste from JSON. We’ll auto-name the route from distance/time.</span>
+            <button type="submit">Plan Hike</button>
+            <span class="note">We’ll auto-name the route from its distance and time.</span>
           </div>
-          <div class="hint">Ensure ORS_API_KEY (for routing) and OS_API_KEY (for OS tiles) are set in your environment or .env.</div>
+          <div class="hint">Ensure ORS_API_KEY (routing) and OS_API_KEY (tiles) are set in your environment or .env.</div>
         </div>
       </form>
     </div>
   </div>
+  <script>
+    (function(){
+      const form = document.querySelector('form[action="/ui/coords"]');
+      const overlay = document.getElementById('loading');
+      const button = form ? form.querySelector('button[type="submit"]') : null;
+      if (!form) return;
+      form.addEventListener('submit', function(){
+        if (button) { button.disabled = true; button.textContent = 'Planning…'; }
+        if (overlay) overlay.classList.add('show');
+      });
+    })();
+  </script>
 </body>
 </html>
