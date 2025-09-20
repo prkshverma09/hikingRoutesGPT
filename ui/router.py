@@ -14,6 +14,7 @@ from app.utils import (
     ors_hiking_route_with_waypoints,
     ExternalAPIError,
 )
+from app.library import generate_leaflet_map_html_from_geojson
 
 # Load environment variables
 load_dotenv()
@@ -72,28 +73,14 @@ async def coords_form_submit(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
-    os_api_key = os.getenv("OS_API_KEY")
-    if not os_api_key:
-        raise HTTPException(status_code=500, detail="Missing OS_API_KEY environment variable")
-
     start = snapped_waypoints[0] if snapped_waypoints else coords[0]
     # Auto-generate a clean title from summary (AI-like naming)
     distance_km = (summary.get("distance_m") or 0) / 1000.0
     duration_h = (summary.get("duration_s") or 0) / 3600.0
     auto_title = f"Scenic Trail • {distance_km:.1f} km • ~{duration_h:.1f} h"
-
-    return templates.TemplateResponse(
-        "map.html",
-        {
-            "request": request,
-            "start_lat": start[0],
-            "start_lon": start[1],
-            "route_geojson": route_geojson,
-            "os_api_key": os_api_key,
-            "title": auto_title,
-            "waypoints_json": (
-                [[lat, lon] for (lat, lon) in snapped_waypoints]
-                if snapped_waypoints else [[lat, lon] for (lat, lon) in coords]
-            ),
-        },
+    html = generate_leaflet_map_html_from_geojson(
+        route_geojson,
+        waypoints=snapped_waypoints or coords,
+        title=auto_title,
     )
+    return HTMLResponse(content=html)
