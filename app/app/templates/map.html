@@ -14,10 +14,11 @@
 <body>
 <div id="map"></div>
 <script>
-  const startLat = {{ start_lat }};
-  const startLon = {{ start_lon }};
-  const route = {{ route_geojson | safe }};
-  const osKey = "{{ os_api_key }}";
+  const startLat = {{ start_lat | tojson }};
+  const startLon = {{ start_lon | tojson }};
+  const route = {{ route_geojson | tojson }};
+  const waypoints = {{ waypoints_json | default('[]') | tojson }};
+  const osKey = {{ os_api_key | tojson }};
 
   const map = L.map('map').setView([startLat, startLon], 13);
 
@@ -31,6 +32,17 @@
   const layer = L.geoJSON(route, {
     style: { color: 'blue', weight: 4 }
   }).addTo(map);
+
+  // Optional waypoint markers
+  try {
+    if (Array.isArray(waypoints)) {
+      waypoints.forEach(function (pt) {
+        if (Array.isArray(pt) && pt.length === 2) {
+          L.marker([pt[0], pt[1]]).addTo(map);
+        }
+      });
+    }
+  } catch (e) { /* ignore */ }
 
   // Fit map to route if possible
   try {
