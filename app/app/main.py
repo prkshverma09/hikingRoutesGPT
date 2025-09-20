@@ -5,11 +5,20 @@ from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
-from fastapi import Request
+from fastapi import Request, Form
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from .utils import geocode_os_names, generate_loop_coordinates, ors_hiking_route, geojson_to_gpx, ExternalAPIError
+from .utils import (
+    geocode_os_names,
+    generate_loop_coordinates,
+    ors_hiking_route,
+    geojson_to_gpx,
+    ExternalAPIError,
+    ors_hiking_route_with_waypoints,
+)
+from .library import generate_leaflet_map_html
 
 app = FastAPI(title="Hiking Routes Service", version="0.1.0")
 
@@ -111,15 +120,19 @@ def map_view(request: Request, start_name: str, offset_lat: float = 0.02, offset
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
     # Note: OS tiles key is exposed to client here; that's expected for raster tiles.
+    # Build waypoints for markers as [[lat, lon], ...] from coords [[lon, lat], ...]
+    waypoints_latlon = [[c[1], c[0]] for c in coords]
+
     return templates.TemplateResponse(
         "map.html",
         {
             "request": request,
             "start_lat": lat,
             "start_lon": lon,
-            "route_geojson": json.dumps(route_geojson),
+            "route_geojson": route_geojson,
             "os_api_key": os_api_key,
             "title": f"Hike from {start_name}",
+            "waypoints_json": waypoints_latlon,
         },
     )
 
@@ -162,8 +175,81 @@ def map_from_coords(request: Request, payload: CoordsPayload):
             "request": request,
             "start_lat": start.lat,
             "start_lon": start.lon,
-            "route_geojson": json.dumps(route_geojson),
+            "route_geojson": route_geojson,
             "os_api_key": os_api_key,
             "title": "Custom Coordinates Map",
+            "waypoints_json": [[p.lat, p.lon] for p in payload.coordinates],
+        },
+    )
+
+
+# -----------------------------
+# Simple UI for entering coordinates
+# -----------------------------
+@app.get("/ui/coords", response_class=HTMLResponse)
+def coords_form(request: Request):
+    # Render a small HTML form to input coordinates
+    return templates.TemplateResponse("coords_form.html", {"request": request})
+
+
+@app.post("/ui/coords", response_class=HTMLResponse)
+def coords_form_submit(
+    request: Request,
+    coords_text: str = Form(...),
+    title: str = Form("Custom Coordinates Map"),
+):
+    """
+    Accepts coordinates in the textarea: one pair per line as "lat, lon"
+    Example:
+      51.713, -0.786
+      51.7125, -0.787
+    """
+    lines = [ln.strip() for ln in coords_text.splitlines() if ln.strip()]
+    coords: List[tuple[float, float]] = []
+    for ln in lines:
+        # Allow comma or space separation
+        sep = "," if "," in ln else None
+        parts = [p.strip() for p in (ln.split(sep) if sep else ln.split())]
+        if len(parts) != 2:
+            raise HTTPException(status_code=400, detail=f"Invalid coordinate line: '{ln}'")
+        try:
+            lat = float(parts[0])
+            lon = float(parts[1])
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid numeric values in line: '{ln}'")
+        coords.append((lat, lon))
+
+    # Always snap using ORS
+    ors_api_key = os.getenv("ORS_API_KEY")
+    if not ors_api_key:
+        raise HTTPException(status_code=500, detail="Missing ORS_API_KEY environment variable")
+    # Build an ORS directions request with all coordinates as waypoints
+    coords_lonlat = [[lon, lat] for lat, lon in coords]
+    try:
+        route_geojson, snapped_waypoints = ors_hiking_route_with_waypoints(coords_lonlat, ors_api_key)
+    except ExternalAPIError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+    # Render snapped line but mark only original input waypoints
+    os_api_key = os.getenv("OS_API_KEY")
+    if not os_api_key:
+        raise HTTPException(status_code=500, detail="Missing OS_API_KEY environment variable")
+
+    start = snapped_waypoints[0] if snapped_waypoints else coords[0]
+    return templates.TemplateResponse(
+        "map.html",
+        {
+            "request": request,
+            "start_lat": start[0],
+            "start_lon": start[1],
+            "route_geojson": route_geojson,
+            "os_api_key": os_api_key,
+            "title": f"{title}",
+            # Use snapped waypoint positions if available; otherwise original
+            "waypoints_json": (
+                [[lat, lon] for (lat, lon) in snapped_waypoints]
+                if snapped_waypoints else [[lat, lon] for (lat, lon) in coords]
+            ),
         },
     )

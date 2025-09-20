@@ -111,8 +111,113 @@ def ors_hiking_route(coordinates: List[List[float]], ors_api_key: str) -> Dict[s
         except Exception:
             err = r.text
         raise ExternalAPIError(f"ORS API error: {e}. Details: {err}")
-    return r.json()
+    data = r.json()
+    # Ensure we return a GeoJSON FeatureCollection for downstream Leaflet rendering
+    if isinstance(data, dict) and data.get("type") == "FeatureCollection" and data.get("features"):
+        return data
 
+    # ORS may return a non-geojson structure with 'routes'
+    try:
+        routes = data.get("routes") if isinstance(data, dict) else None
+        if routes:
+            geom = routes[0].get("geometry")
+            coords: List[List[float]]
+            if isinstance(geom, dict) and geom.get("coordinates"):
+                coords = geom["coordinates"]  # [ [lon,lat], ... ]
+            elif isinstance(geom, str):
+                # encoded polyline string -> decode
+                try:
+                    latlon = _decode_polyline(geom, precision=5)
+                except Exception:
+                    latlon = _decode_polyline(geom, precision=6)
+                coords = [[lon, lat] for (lat, lon) in latlon]
+            else:
+                raise ValueError("Unsupported ORS geometry format")
+
+            return {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "LineString", "coordinates": coords},
+                        "properties": {},
+                    }
+                ],
+            }
+    except Exception:
+        pass
+
+    # Fallback: return as-is (Leaflet may still handle if it's valid GeoJSON)
+    return data
+
+
+def ors_hiking_route_with_waypoints(
+    coordinates: List[List[float]], ors_api_key: str
+) -> Tuple[Dict[str, Any], List[Tuple[float, float]]]:
+    """
+    Call ORS foot-hiking and return a FeatureCollection together with snapped
+    waypoint coordinates (lat, lon), derived from ORS 'way_points' indices onto
+    the returned route geometry.
+    """
+    url = "https://api.openrouteservice.org/v2/directions/foot-hiking"
+    headers = {"Authorization": ors_api_key, "Content-Type": "application/json"}
+    payload = {
+        "coordinates": coordinates,
+        "instructions": True,
+        # Request JSON (not GeoJSON) so we can access 'way_points'
+        "format": "json",
+    }
+    r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=40)
+    try:
+        r.raise_for_status()
+    except Exception as e:
+        try:
+            err = r.json()
+        except Exception:
+            err = r.text
+        raise ExternalAPIError(f"ORS API error: {e}. Details: {err}")
+
+    data = r.json()
+    try:
+        route0 = data["routes"][0]
+    except Exception:
+        raise ExternalAPIError("Invalid ORS response structure: missing routes[0]")
+
+    geom = route0.get("geometry")
+    coords: List[List[float]]
+    if isinstance(geom, dict) and geom.get("coordinates"):
+        coords = geom["coordinates"]  # [[lon, lat], ...]
+    elif isinstance(geom, str):
+        # encoded polyline string -> decode
+        try:
+            latlon = _decode_polyline(geom, precision=5)
+        except Exception:
+            latlon = _decode_polyline(geom, precision=6)
+        coords = [[lon, lat] for (lat, lon) in latlon]
+    else:
+        raise ExternalAPIError("Unsupported ORS geometry format")
+
+    # Build FeatureCollection LineString from coords
+    feature_collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": {}}
+        ],
+    }
+
+    # Extract snapped waypoints from indices onto geometry
+    snapped_latlon: List[Tuple[float, float]] = []
+    try:
+        wp_idx = route0.get("way_points") or []  # indices into geometry array
+        for idx in wp_idx:
+            if isinstance(idx, int) and 0 <= idx < len(coords):
+                lon, lat = coords[idx]
+                snapped_latlon.append((lat, lon))
+    except Exception:
+        # If we can't extract, leave snapped_latlon empty
+        snapped_latlon = []
+
+    return feature_collection, snapped_latlon
 
 def geojson_to_gpx(geojson_data: Dict[str, Any]) -> str:
     """

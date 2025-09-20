@@ -8,6 +8,7 @@ def generate_leaflet_map_html(
     coordinates: Iterable[Tuple[float, float]],
     os_api_key: Optional[str] = None,
     title: str = "Custom Coordinates Map",
+    show_markers: bool = True,
 ) -> str:
     """
     Generate a standalone HTML page (as a string) containing a Leaflet map with a
@@ -63,6 +64,9 @@ def generate_leaflet_map_html(
   }).addTo(map);
 """
 
+    # Prepare a JS-safe waypoints array [[lat, lon], ...]
+    waypoints_js = json.dumps([[lat, lon] for (lat, lon) in points])
+
     html = f"""
 <!DOCTYPE html>
 <html>
@@ -83,6 +87,7 @@ def generate_leaflet_map_html(
     const startLat = {start_lat};
     const startLon = {start_lon};
     const route = {json.dumps(route_geojson)};
+    const waypoints = {waypoints_js};
 
     const map = L.map('map').setView([startLat, startLon], 13);
 {tile_js}
@@ -90,6 +95,9 @@ def generate_leaflet_map_html(
     const layer = L.geoJSON(route, {{
       style: {{ color: 'blue', weight: 4 }}
     }}).addTo(map);
+
+    // Optional markers for waypoints
+    {("waypoints.forEach(pt => L.marker(pt).addTo(map));" if show_markers else "")}
 
     // Fit map to route if possible
     try {{
@@ -110,11 +118,12 @@ def write_leaflet_map_html(
     output_file: str,
     os_api_key: Optional[str] = None,
     title: str = "Custom Coordinates Map",
+    show_markers: bool = True,
 ) -> None:
     """
     Write a standalone HTML file with a Leaflet map that draws a polyline for the
     provided coordinates.
     """
-    html = generate_leaflet_map_html(coordinates, os_api_key=os_api_key, title=title)
+    html = generate_leaflet_map_html(coordinates, os_api_key=os_api_key, title=title, show_markers=show_markers)
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html)
