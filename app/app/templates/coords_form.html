@@ -2,53 +2,67 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Enter Coordinates</title>
+  <title>Hiking Route Planner</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    textarea { width: 100%; height: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
-    label { display: block; font-weight: 600; margin-bottom: 8px; }
-    input[type="text"] { width: 100%; padding: 8px; font-size: 14px; }
-    .hint { color: #666; font-size: 12px; margin-top: 6px; }
-    .row { margin-bottom: 16px; }
-    button { background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; }
-    button:hover { background: #1d4ed8; }
-    .header { margin-bottom: 16px; }
+    :root {
+      --bg: #0b1220;
+      --panel: #0f172a;
+      --muted: #94a3b8;
+      --text: #e2e8f0;
+      --accent: #22c55e;
+      --accent-2: #2563eb;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .card { width: min(920px, 92vw); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); overflow: hidden; }
+    .card-header { padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .card-title { font-weight: 700; letter-spacing: 0.2px; }
+    .badge { font-size: 12px; color: var(--muted); background: #111827; border: 1px solid var(--border); padding: 6px 8px; border-radius: 999px; }
+    .card-body { display: grid; gap: 20px; padding: 20px 24px 24px; }
+    .row { display: grid; gap: 8px; }
+    label { font-size: 14px; color: var(--muted); }
+    textarea { width: 100%; height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--text); background: #0b1220; border: 1px solid var(--border); border-radius: 12px; padding: 12px; outline: none; }
+    textarea:focus { border-color: #334155; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+    .hint { color: var(--muted); font-size: 12px; }
+    .examples { background: #0b1220; border: 1px dashed var(--border); border-radius: 12px; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: #cbd5e1; }
+    .actions { display: flex; gap: 12px; align-items: center; }
+    button { background: linear-gradient(180deg, #22c55e, #16a34a); color: #001b07; border: none; padding: 12px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; letter-spacing: 0.2px; }
+    button:hover { filter: brightness(1.05); }
+    .note { font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Plot Coordinates</h1>
-      <p>Enter one coordinate per line as "lat, lon" or "lat lon". Example:</p>
-      <pre>51.713, -0.786
-51.7125, -0.787
-51.712, -0.788
-51.710, -0.790
-51.708, -0.793
-51.706, -0.796
-51.704, -0.798</pre>
+  <div class="wrap">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Hiking Route Planner</div>
+        <div class="badge">Snapped to foot-hiking (ORS)</div>
+      </div>
+      <form method="post" action="/ui/coords">
+        <div class="card-body">
+          <div class="row">
+            <label for="coords_text">Waypoints (JSON)</label>
+            <textarea name="coords_text" id="coords_text" required placeholder='[[51.713, -0.786], [51.7125, -0.787], [51.712, -0.788]]'></textarea>
+            <div class="hint">Provide at least two coordinates. Supported formats: [[lat, lon], ...] or [{"lat": 51.713, "lon": -0.786}, ...]</div>
+          </div>
+          <div class="examples">Example:
+[
+  [51.713, -0.786],
+  [51.7125, -0.787],
+  [51.710, -0.790]
+]
+          </div>
+          <div class="actions">
+            <button type="submit">Build Route</button>
+            <span class="note">Tip: Paste from JSON. We’ll auto-name the route from distance/time.</span>
+          </div>
+          <div class="hint">Ensure ORS_API_KEY (for routing) and OS_API_KEY (for OS tiles) are set in your environment or .env.</div>
+        </div>
+      </form>
     </div>
-
-    <form method="post" action="/ui/coords">
-      <div class="row">
-        <label for="coords_text">Coordinates</label>
-        <textarea name="coords_text" id="coords_text" required placeholder="lat, lon"></textarea>
-        <div class="hint">Minimum 2 points. Latitude and longitude are decimals. Comma or space separated.</div>
-      </div>
-
-      <div class="row">
-        <label for="title">Map Title</label>
-        <input type="text" name="title" id="title" value="Custom Coordinates Map"/>
-      </div>
-
-      <div class="row">
-        <div class="hint">Routes are snapped to foot-hiking network using OpenRouteService. Ensure ORS_API_KEY is set in your environment or .env.</div>
-      </div>
-
-      <button type="submit">Render Map</button>
-    </form>
   </div>
 </body>
 </html>
